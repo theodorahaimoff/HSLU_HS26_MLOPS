@@ -10,6 +10,8 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | D3 | 2026-10-15 | Switch the CPI covariate from quarterly to monthly LIK | E1 |
 | D4 | 2026-10-15 | Retrain on a new SAKE release, not on a weekly schedule | E2 |
 | D5 | 2026-10-15 | Store the download date with every pull of every source | A1, D2 |
+| D6 | 2026-10-15 | Predict the year-on-year change; forecast = same quarter last year + change | B2 |
+| D7 | 2026-10-15 | Features computed as of the release date of the latest SAKE quarter | E1, leakage |
 
 ---
 
@@ -56,13 +58,23 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | Monitoring Consumption Switzerland (weekly card spending) | Possible later addition, not needed for E1 |
 | SNB exchange rates (daily) | Possible later addition, indirect link to unemployment |
 
-## D3 · Monthly LIK instead of quarterly CPI
+## D3 · Monthly inflation instead of quarterly CPI
 
-**Decision.** Keep inflation as a covariate, as in the proposal, but ingest the monthly LIK (BFS consumer price index) instead of a quarterly value.
+**Decision.** Keep inflation as a covariate, as in the proposal, but ingest monthly year-on-year inflation instead of a quarterly CPI value.
 
-**Why.** Adds a second source that updates during the semester and keeps the proposal's covariate. Inflation is expected to be a weak predictor of unemployment in the short run; its importance is checked in the MS3 evaluation.
+**Source.** SNB data portal, cube `plkopr`, CSV without API key: `https://data.snb.ch/api/cube/plkopr/data/csv/en`. It republishes the BFS consumer price index (LIK). The series `VVP` is the change vs. the same month a year earlier in %. The second line of the file holds the publication date, stored with every pull (D5).
 
-**To do.** Locate the monthly LIK resource on opendata.swiss and record its URL here.
+**Why.** Monthly updates about 3 weeks after month end, history from 1921, no gaps since 2010. Keeps the proposal's covariate.
+
+**Alternatives considered.**
+
+| Option | Why not |
+|--------|---------|
+| `landesindex-der-konsumentenpreise` on opendata.swiss | Published by Kanton Zug, not the BFS |
+| BFS LIK datasets per year on opendata.swiss | HTML and PDF only |
+| BFS table "CPI (december 2015=100), detailed results since 1982" | Last updated February 2021, old basket, `.xls` |
+
+**Note.** Inflation correlates with the unemployment level (−0.63 three quarters later), but hardly with its change, so part of the link is likely a shared trend. Its contribution is checked in the MS3 evaluation.
 
 ## D4 · Retraining cadence
 
@@ -75,3 +87,26 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 **Decision.** Each ingested file is stored with its download date, and for SAKE also its release date. New SAKE releases are found by listing the resources of the CKAN dataset, not by watching one fixed file URL.
 
 **Why.** A new quarterly release may be published as a separate resource (review point A1), and WEA values can be revised (D2). Storing dates makes it clear which data version every forecast used, and lets features be built only from data available at each cutoff, so nothing from the future leaks into the backtest.
+
+## D6 · Target: year-on-year change
+
+**Context.** SAKE values are not seasonally adjusted: Q1 and Q3 lie about 0.3 pp above the yearly mean, Q2 and Q4 below (exploration, section 3). The quarter-to-quarter change mostly reflects the season.
+
+**Decision.** The model predicts, per segment, the change of the rate in quarter t+1 against quarter t−3 (same quarter one year earlier). The forecast is the rate in t−3 plus the predicted change. MAE is measured on the rate.
+
+**Why.** WEA and inflation correlate clearly with the year-on-year change (WEA −0.66 two quarters back, inflation −0.50 in the same quarter), but hardly with the quarter-to-quarter change. A prediction of zero equals the seasonal-naive baseline, so the model learns a correction to it. The latest year-on-year change is a feature, so the persistence information stays available.
+
+## D7 · Features as of the release date
+
+**Decision.** One feature row per segment and target quarter t+1, computed as of the release date of quarter t (historically quarter end + 49 days, from now on the CSV `issued` date). Each row stores this `as_of` date.
+
+| Group | Features |
+|-------|----------|
+| Segment | Gender, nationality, age group (categorical), quarter of the target |
+| Own history | Rate in t, t−1, t−3, year-on-year change in t, `STATUS` of the value in t |
+| WEA | Mean of the last 13 weeks before `as_of`, quarterly means 1–4 quarters back |
+| Inflation | Latest year-on-year value published before `as_of`, quarterly means 1–4 quarters back |
+
+Between SAKE releases, the weekly and monthly refresh recomputes the WEA and inflation features as of the refresh date.
+
+**Limitation.** Only the current version of each source is available, not past versions. If SECO, the SNB or the BFS revised older values, the backtest uses the corrected numbers. From now on every pull is stored with its date (D5).

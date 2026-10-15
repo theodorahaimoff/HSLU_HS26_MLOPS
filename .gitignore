@@ -15,12 +15,10 @@ __pycache__/
 .venv/
 venv/
 env/
-.python-version
 
-# ---- Data (fetched by the feature pipeline, not versioned in git) ----
-data/raw/*.csv
-data/raw/*.parquet
-data/processed/*.parquet
+# ---- Data (fetched by the pipelines, not versioned in git) ----
+data/raw/*
+data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 

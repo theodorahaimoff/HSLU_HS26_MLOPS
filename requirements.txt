@@ -22,3 +22,8 @@ python-dotenv>=1.0
 
 # --- Testing ---
 pytest>=8.2
+
+# --- Exploration / notebooks ---
+matplotlib>=3.8
+jupyter>=1.0
+ipykernel>=6.29
