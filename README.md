@@ -30,6 +30,22 @@ flowchart LR
 | **Training pipeline** | Trains one pooled LightGBM model across all 45 segments, registers it | Weekly + manual dispatch |
 | **Inference pipeline** | Loads the best registered model, produces all 45 forecasts in a batch, serves them | Scheduled, after each training run |
 
+## Data
+
+| Source | Role | Frequency | Access |
+|--------|------|-----------|--------|
+| BFS Labour Force Survey (SAKE), ILO unemployment rate by gender, nationality and age group | Target (label) | Quarterly | opendata.swiss CKAN API |
+| SECO Weekly Economic Activity (WEA) | Nowcast feature | Weekly | CSV from SECO |
+| BFS consumer price index (LIK) | Nowcast feature | Monthly | opendata.swiss |
+
+**Scope.** SAKE data from 2010-Q1, the first quarter with the full gender × nationality × age breakdown. The 65+ age group is excluded. This gives the national total plus 44 segments.
+
+**How the system stays live.** SAKE only changes once a quarter, so the forecast is a nowcast: new WEA values arrive weekly and new LIK values monthly, and each refreshes the features and the forecast. A new SAKE release triggers retraining.
+
+**Data versions.** Every download is stored with its download date (and SAKE with its release date), because WEA values can be revised and SAKE releases can appear as new files.
+
+**Change from the MS1 proposal.** The proposal used SAKE with a quarterly CPI covariate only. After the MS1 reviews (editorial point E1) WEA was added and CPI switched to monthly LIK. See [`docs/decisions.md`](docs/decisions.md) for the reasons and the alternatives considered.
+
 ## Tech stack
 
 - **Model**: LightGBM (pooled, single model across all segments)
