@@ -19,6 +19,7 @@ env/
 # ---- Data (fetched by the pipelines, not versioned in git) ----
 data/raw/*
 data/processed/*
+data/feature_store
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
