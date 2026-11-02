@@ -1,157 +1,245 @@
-\documentclass[10pt,a4paper]{article}
-% MS2 summary · compile with pdflatex (Overleaf default) · output: docs/ms2_summary.pdf
+\documentclass[11pt,a4paper]{article}
 
-\usepackage[a4paper,margin=1.7cm,top=1.5cm,bottom=1.6cm]{geometry}
+% -------------------------------------------------
+% HSLU-like Milestone Summary (MLOps HS26, same template as docs/proposal.pdf)
+% -------------------------------------------------
+
+% ---------- Encoding & Typography ----------
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[scaled=0.95]{helvet}
-\renewcommand{\familydefault}{\sfdefault}
+\usepackage[english]{babel}
+\usepackage{lmodern}
 \usepackage{microtype}
-\usepackage[table]{xcolor}
-\usepackage{tabularx,booktabs,array}
-\usepackage{enumitem}
-\usepackage{titlesec}
-\usepackage[hidelinks]{hyperref}
+\usepackage{comment}
+\usepackage{amsmath}
 
-\definecolor{accent}{HTML}{1F4E79}
-\definecolor{changed}{HTML}{1E7B34}
-\definecolor{partly}{HTML}{B26A00}
-\definecolor{rowgray}{HTML}{F3F5F7}
-
-\titleformat{\section}{\large\bfseries\color{accent}}{\thesection}{0.6em}{}
-\titlespacing*{\section}{0pt}{1.0em}{0.4em}
-\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
-\titlespacing*{\subsection}{0pt}{0.7em}{0.25em}
+% ---------- Page Layout ----------
+\usepackage[a4paper, top=15mm, bottom=13mm, left=13mm, right=13mm,
+headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
+\usepackage{setspace}
+\setstretch{1.0}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.35em}
-\setlist{nosep,leftmargin=1.2em,topsep=0.2em}
-\renewcommand{\arraystretch}{1.25}
-\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
-\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
-\newcommand{\file}[1]{\texttt{\small #1}}
-\newcommand{\changed}{\textbf{\color{changed}Changed}}
-\newcommand{\partly}{\textbf{\color{partly}Partly}}
+
+% ---------- Colors ----------
+\usepackage{xcolor}
+\definecolor{hsluRed}{HTML}{E30613}
+\definecolor{hsluDark}{HTML}{222222}
+\definecolor{hsluGray}{HTML}{666666}
+\definecolor{lineGray}{HTML}{D9D9D9}
+\definecolor{boxGray}{HTML}{F5F5F5}
+\definecolor{statusChanged}{HTML}{1E7B34}
+\definecolor{statusPartly}{HTML}{B26A00}
+
+% ---------- Graphics & Tables ----------
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=1.2em, itemsep=1pt, topsep=2pt, parsep=0pt}
+\setlist[enumerate]{leftmargin=1.4em, itemsep=1pt, topsep=2pt, parsep=0pt}
+
+% ---------- Custom column types: bold label / plain text, ragged-right (no big word-gaps) ----------
+\newcolumntype{L}{>{\bfseries\raggedright\arraybackslash}p{0.19\linewidth}}
+\newcolumntype{R}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------- Headers/Footers ----------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Hochschule Luzern \textbar\ Informatik}
+\rhead{\small MLOPS HS26 MS2 Summary}
+\cfoot{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{lineGray}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+% First-page style: no header text/rule, footer page number kept
+\fancypagestyle{firstpage}{%
+	\fancyhf{}
+	\cfoot{\small \thepage}
+	\renewcommand{\headrulewidth}{0pt}
+}
+
+% ---------- Section Style ----------
+\usepackage{titlesec}
+\titleformat{\section}
+{\Large\bfseries\color{hsluDark}}
+{\thesection}{0.6em}{}
+\titleformat{\subsection}
+{\normalsize\bfseries\color{hsluDark}}
+{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{0.55em}{0.2em}
+\titlespacing*{\subsection}{0pt}{0.4em}{0.08em}
+
+% ---------- Hyperlinks ----------
+\usepackage{hyperref}
+\hypersetup{
+	colorlinks=true,
+	urlcolor=blue,
+	linkcolor=hsluDark
+}
+
+% ---------- Utility ----------
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\changed}{\textbf{\color{statusChanged}Changed}}
+\newcommand{\partly}{\textbf{\color{statusPartly}Partly}}
 
 \begin{document}
-
-{\LARGE\bfseries\color{accent} MS2 Summary · Feature Pipeline}\\[0.25em]
-{\large P04 · Swiss Segmented Unemployment Rate Predictor}\\[0.15em]
-{\small MLOps HS26 · Repository: \url{https://github.com/theodorahaimoff/HSLU_HS26_MLOPS} · Decision log: \file{docs/decisions.md} (D1--D13)}
-
-\section{What I achieved in this milestone}
-
-The feature pipeline runs on a schedule without manual steps. Every day it pulls three live sources, stores every
-download with its date and hash, rebuilds a point-in-time correct feature table for all 45 series (national total
-and 44 gender~×~nationality~×~age segments) and writes it as a new version to a versioned Parquet feature store on GCS.
-
-\rowcolors{2}{rowgray}{white}
-\begin{tabularx}{\textwidth}{@{}L{3.6cm}Y@{}}
-\toprule
-\textbf{Requirement} & \textbf{What works now} \\
-\midrule
-Live ingestion + backfill &
-SAKE (BFS, quarterly target) via the opendata.swiss CKAN API, SECO Weekly Economic Activity (weekly) and LIK
-inflation from the SNB data portal (monthly). Each run recomputes the full backfill: one row set per SAKE release
-since 2011Q1 (62~release dates~× 45~series, the MS3 training data) plus \emph{refresh} rows as of the run date, the
-current nowcast. \\
-Features without leakage &
-Every value gets an \texttt{available\_from} date (release date, or period end + publication lag). A row may only
-use values available on its \texttt{as\_of} date. Three checks run before anything is written; the strongest
-rebuilds random dates after deleting all later data and requires identical features. \\
-Feature store &
-GCS bucket: \file{raw/pull\_log.csv} (download date, SHA-256, release date), raw files stored only when their
-content changed, and \file{feature\_store/features/version=<date>/} with \file{features.parquet} and a
-\file{manifest.json} (source hashes, git commit, lags). \\
-Scheduled execution &
-GitHub Actions \file{feature\_pipeline.yml}, daily 05:17 UTC (weekly until 02.11, D12). Scheduled runs on 26.10 and
-02.11, daily from 03.11, all green; tests run first, so a broken pipeline writes no version. \\
-Docker, pinned deps, README &
-\file{Dockerfile}: \texttt{python:3.14-slim}, uv pinned, dependency layer first, non-root user, credentials only at
-run time. All installs use \texttt{uv sync -{}-locked} on \file{uv.lock}. README: architecture, data, feature store
-layout, how to run locally, in Docker and in CI. \\
-Tests, CI, secrets &
-25 unit tests on synthetic files (no network, no credentials); \file{ci.yml} runs lint, tests and the Docker build on
-every push. Keys live in \file{.env} (gitignored) and GitHub Secrets; the history contains none. \\
-\bottomrule
-\end{tabularx}
-
-\subsection{Key decisions}
-\begin{itemize}
-  \item \textbf{Nowcast instead of a static quarterly pipeline} (D1--D3): SAKE stays the target, weekly WEA and monthly
-        inflation make the features change between releases.
-  \item \textbf{Target = year-on-year change} (D6): SAKE is not seasonally adjusted (Q1 and Q3 lie about 0.3~pp above the yearly mean, Q2 and Q4 below).
-  \item \textbf{Point-in-time features at the SAKE release date} (D7), with publication lags observed in the data
-        (SAKE 49~days, WEA $\le$24, LIK 21) and chosen on the late side: too late is pessimistic, too early would leak.
-  \item \textbf{Versioning in the pipeline instead of DVC} (D11): data arrives on a schedule, so every pull is hashed
-        and stored at download time, and every feature version names its source hashes and git commit.
-\end{itemize}
-Observed on the way: SECO revised past WEA values between my pulls of 15.10 and 25.10 (2026Q1 mean $-0.41 \rightarrow
--0.49$), which is exactly why every pull is kept with its date.
-
-\subsection{What a reviewer should look at first}
-\begin{enumerate}
-  \item \file{notebooks/02\_feature\_pipeline.ipynb}: every step of the pipeline with its outputs and findings.
-  \item \file{src/feature\_pipeline/features.py}: \texttt{build\_features}, \texttt{backfill} and the leakage checks
-        in \texttt{check\_features}; proven by \file{tests/test\_features.py::test\_no\_leakage\_on\_any\_date}.
-  \item The \textbf{Actions} tab: scheduled runs of \emph{Feature pipeline}, and \emph{ci} on every push.
-  \item Run it yourself, no credentials needed: \texttt{uv sync -{}-locked \&\& uv run python -m
-        src.feature\_pipeline.run} pulls the live sources and writes the feature store to \file{data/}.
-\end{enumerate}
-
-\newpage
-\section{Response to reviews}
-Every labelled point from both MS1 reviews and the editorial summary. Details and alternatives: \file{docs/decisions.md}.
-
-\rowcolors{2}{rowgray}{white}
-\begin{tabularx}{\textwidth}{@{}L{0.9cm}L{3.1cm}L{1.35cm}Y@{}}
-\toprule
-\textbf{Label} & \textbf{Point} & \textbf{Status} & \textbf{Answer · where} \\
-\midrule
-E1 \newline \small(Must) & Data too static: SAKE changes once a quarter, so ingest $\rightarrow$ retrain $\rightarrow$ monitor
-can hardly be shown & \changed &
-Nowcast design: SAKE stays the quarterly target; SECO WEA (weekly) and monthly LIK inflation were added as live
-features. New WEA or LIK values reach the feature store as refresh rows on the next daily run, so the forecast input
-changes every week. A monthly SECO target was rejected: no API, monthly figures only as PDF (would need scraping).
-\newline\file{docs/decisions.md} D1--D3, D12 · \file{src/feature\_pipeline/sources.py} \\
-E2 & Weekly scheduled retraining on unchanged quarterly labels produces identical models & \partly &
-Decided: retrain on a new SAKE release, not on a schedule (D4). The trigger signal exists now: a new SAKE hash in the
-pull log sets \texttt{new\_sake\_release} in the manifest of that feature version. The retraining workflow that reacts
-to it is MS3 work. \newline\file{src/feature\_pipeline/pull\_log.py} \\
-A1 & Release detection by the hash of one fixed file URL misses releases published as new resources; store release
-dates & \changed &
-Each run lists the dataset's resources through CKAN and takes the CSV with the latest \texttt{issued} date, not a fixed
-URL. The pull log stores download date, release date, latest quarter and SHA-256 per pull. Tested: a newer release
-as a separate resource is picked (\file{tests/test\_sources.py}), and two consecutive pulls store only what changed
-(\file{tests/test\_storage.py}). The first real new release (2026Q3, expected around 18.11) is the live check. \newline D5 · \file{src/feature\_pipeline/sources.py} (\texttt{pull\_sake}) \\
-A2, B1 & Small segments: how does BFS mark unreliable or suppressed values, and how is it shown? & \partly &
-BFS marks reliability in a separate \texttt{STATUS} column (A normal, U low reliability, O missing), not with brackets.
-In scope there are no O values, but 17 of 45 segments have U quarters (7 in more than half). The code is kept as
-feature \texttt{status\_t}; the success target is measured on the 28 segments without U and the others are reported
-separately. The UI flag follows with the UI in MS4. \newline D9 · \file{notebooks/01\_data\_exploration.ipynb} §2--3 \\
-B2 & 15\,\% target against seasonal naive only; persistence may be the stronger baseline & \changed &
-Both computed on the stored features, last 12 target quarters, MAE in pp: seasonal naive 0.794 vs persistence 0.976
-over all 45 series, and 0.630 vs 0.672 on the 28 reliable segments. Seasonal naive is stronger in every group
-(persistence carries last quarter's season into the next). Restated target: MAE $\le$ 0.535~pp on the 28 reliable
-segments, 15\,\% below seasonal naive. \newline D10 · \file{src/training\_pipeline/baselines.py} \\
-B3 & \texttt{requirements.txt} with minimum versions only & \changed &
-\file{uv.lock} pins every package with version and hash; CI, the scheduled job and the Docker build install with
-\texttt{uv sync -{}-locked}, which fails on a stale lockfile. \file{requirements.txt} removed; dev tools in a separate
-group, not in the image. \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\
-E3 & Why FastAPI \emph{and} Streamlit? & \changed &
-FastAPI dropped. The forecasts are batch-shaped: all inputs are in the feature store before anyone asks, and all
-45 series are forecast per run, so an API would only return what the batch job already computed. A single Streamlit
-app on Cloud Run will read the forecasts from GCS. Model version, feature time and creation time are stored per
-forecast row and shown in the UI. \newline D13 · \file{docs/decisions.md} \\
-\bottomrule
-\end{tabularx}
-
-\subsection{Next (MS3)}
-Training pipeline reading the feature store: pooled LightGBM on the year-on-year target, walk-forward backtest over
-the last 12 quarters against the seasonal-naive baseline, W\&B tracking and registry with a \emph{champion} alias, and
-a retraining workflow triggered by a new SAKE release (E2).
-
-\vfill
-{\footnotesize\color{gray} AI use: I used Claude (Anthropic) as a coding and writing assistant for this milestone. I
-reviewed, ran and can explain every part of the code and this summary.}
-
+	\thispagestyle{firstpage}
+	
+	% =========================
+	% Cover / Title Area
+	% =========================
+	
+	\vspace{4mm}
+	
+	{\LARGE\bfseries\color{hsluDark}MS2 Summary for MLOPS Project}\\[1mm]
+	{\large\color{hsluGray}Theodora Haimoff}
+	
+	\vspace{4mm}
+	
+	% =========================
+	% Metadata Box
+	% =========================
+	\colorbox{boxGray}{%
+		\parbox{\dimexpr\linewidth-2\fboxsep\relax}{
+			\vspace{1mm}
+			\renewcommand{\arraystretch}{1.35}
+			\begin{tabularx}{\linewidth}{>{\bfseries}p{0.24\linewidth} X}
+				Project Title & Swiss Segmented Unemployment Rate Predictor (P04)\\
+				Milestone & MS2 · Feature Pipeline\\
+				Repository & \url{https://github.com/theodorahaimoff/HSLU_HS26_MLOPS} \\
+				Decision log & \file{docs/decisions.md} (D1--D13), referenced below as D\textit{n}\\
+				Date of Submission & 02.11.2026\\
+			\end{tabularx}
+			\vspace{1mm}
+		}
+	}
+	
+	\vspace{0.6em}
+	
+	% =========================
+	% Main Sections
+	% =========================
+	\section{What I Achieved in this Milestone}
+	
+	The feature pipeline runs on a schedule without manual steps. Every day it pulls three live sources, stores every
+	download with its date and hash, rebuilds a point-in-time correct feature table for all 45 series (national total
+	and 44 gender $\times$ nationality $\times$ age segments) and writes it as a new version to a versioned Parquet
+	feature store on GCS.
+	
+	\begingroup
+	\small
+	\renewcommand{\arraystretch}{1.0}
+	\begin{longtable}{L p{0.75\linewidth}}
+		\toprule
+		Live ingestion \& backfill & SAKE (BFS, quarterly target) via the \texttt{opendata.swiss} CKAN API, SECO Weekly
+		Economic Activity (weekly) and LIK inflation from the SNB data portal (monthly). Each run recomputes the full backfill:
+		one row set per SAKE release since 2011--Q1 (62 release dates $\times$ 45 series, the MS3 training data) plus
+		\emph{refresh} rows as of the run date, the current nowcast. \\
+		Features without leakage & Every value gets an \texttt{available\_from} date (release date, or period end +
+		publication lag). A row may only use values available on its \texttt{as\_of} date. Three checks run before anything
+		is written; the strongest rebuilds random dates after deleting all later data and requires identical features. \\
+		Feature store & GCS bucket: \file{raw/pull\_log.csv} (download date, SHA-256, release date), raw files stored only
+		when their content changed, and \file{feature\_store/features/version=<date>/} with \file{features.parquet} and a
+		\file{manifest.json} (source hashes, git commit, lags). \\
+		Scheduled execution & GitHub Actions \file{feature\_pipeline.yml}, daily at 05:17 UTC (weekly until 02.11, D12).
+		Scheduled runs on 26.10 and 02.11, daily from 03.11, all green; tests run first, so a broken pipeline writes no
+		version. \\
+		Docker, pinned deps, README & \file{Dockerfile}: \texttt{python:3.14-slim}, uv pinned, dependency layer first,
+		non-root user, credentials only at run time. All installs use \texttt{uv sync -{}-locked} on \file{uv.lock}. README:
+		architecture, data, feature store layout, how to run locally, in Docker and in CI. \\
+		Tests, CI \& secrets & 25 unit tests on small fixture files in the exact source formats, so they run in CI without
+		network or credentials; \file{ci.yml} runs lint, tests and the Docker build on every push. On the real data, source
+		validation and the leakage checks run in every scheduled run before a version is written. Keys live in \file{.env}
+		(gitignored) and GitHub Secrets; the history contains none. \\
+		\bottomrule
+	\end{longtable}
+	\endgroup
+	
+	\vspace{-0.8em}
+	\subsection{Key decisions}
+	\begin{itemize}
+		\item \textbf{Nowcast instead of a static quarterly pipeline} (D1--D3): SAKE stays the target, weekly WEA and
+		monthly inflation make the features change between releases.
+		\item \textbf{Target = year-on-year change} (D6): SAKE is not seasonally adjusted (Q1 and Q3 lie about 0.3\,pp
+		above the yearly mean, Q2 and Q4 below).
+		\item \textbf{Point-in-time features at the SAKE release date} (D7), with publication lags observed in the data
+		(SAKE 49 days, WEA $\le$ 24, LIK 21) and chosen on the late side: too late is pessimistic, too early would
+		leak.
+		\item \textbf{Versioning in the pipeline instead of DVC} (D11): data arrives on a schedule, so every pull is hashed
+		and stored at download time, and every feature version names its source hashes and git commit.
+	\end{itemize}
+	Observed on the way: SECO revised past WEA values between my pulls of 15.10 and 25.10 (2026--Q1 mean
+	$-0.41 \rightarrow -0.49$), which is exactly why every pull is kept with its date.
+	
+	\subsection{What a reviewer should look at first}
+	\begin{enumerate}
+		\item \file{notebooks/02\_feature\_pipeline.ipynb}: every step of the pipeline with its outputs and findings.
+		\item \file{src/feature\_pipeline/features.py} builds the features (\texttt{build\_features},
+		\texttt{backfill}) and checks them for leakage (\texttt{check\_features}); \file{tests/test\_features.py}
+		proves it on every date.
+		\item The \textbf{Actions} tab: scheduled runs of \emph{Feature pipeline}, and \emph{ci} on every push.
+		\item Run it yourself, no credentials needed; this pulls the live sources and writes the feature store to
+		\file{data/}:\\ \texttt{uv sync -{}-locked \&\& uv run python -m src.feature\_pipeline.run}
+	\end{enumerate}
+	
+	\section{Response to Reviews}
+	Every labelled point from both MS1 reviews and the editorial summary; details and alternatives are in the
+	decision log.
+	
+	\begingroup
+	\small
+	\renewcommand{\arraystretch}{1.0}
+	\begin{longtable}{>{\bfseries\raggedright\arraybackslash}p{0.055\linewidth} R{0.19\linewidth} R{0.085\linewidth} R{0.575\linewidth}}
+		\toprule
+		Label & \textbf{Point} & \textbf{Status} & \textbf{Answer \textperiodcentered\ where} \\
+		\midrule
+		\endhead
+		E1 \newline {\normalfont\footnotesize(Must)} & Data too static: SAKE changes once a quarter, so ingest $\rightarrow$
+		retrain $\rightarrow$ monitor can hardly be shown & \changed &
+		Nowcast design: SAKE stays the quarterly target; SECO WEA (weekly) and monthly LIK inflation were added as live
+		features. New WEA or LIK values reach the feature store as refresh rows on the next daily run, so the forecast input
+		changes every week. A monthly SECO target was rejected: no API, monthly figures only as PDF (would need scraping).
+		\newline D1--D3, D12 · \file{src/feature\_pipeline/sources.py} \\ \addlinespace[0.3em]
+		E2 & Weekly scheduled retraining on unchanged quarterly labels produces identical models & \partly &
+		Decided: retrain on a new SAKE release, not on a schedule (D4). The trigger signal exists now: a new SAKE hash in the
+		pull log sets \texttt{new\_sake\_release} in the manifest of that feature version. The retraining workflow that reacts
+		to it is MS3 work. \newline \file{src/feature\_pipeline/pull\_log.py} \\ \addlinespace[0.3em]
+		A1 & Release detection by the hash of one fixed file URL misses releases published as new resources; store release
+		dates & \changed &
+		Each run lists the dataset's resources through CKAN and takes the CSV with the latest \texttt{issued} date, not a fixed
+		URL. The pull log stores download date, release date, latest quarter and SHA-256 per pull. Tested: a newer release as a
+		separate resource is picked (\file{tests/test\_sources.py}), and two consecutive pulls store only what changed
+		(\file{tests/test\_storage.py}). The first real new release (2026--Q3, expected around 18.11) is the live check.
+		\newline D5 · \file{src/feature\_pipeline/sources.py} (\texttt{pull\_sake}) \\ \addlinespace[0.3em]
+		A2, B1 & Small segments: how does BFS mark unreliable or suppressed values, and how is it shown? & \partly &
+		BFS marks reliability in a separate \texttt{STATUS} column (A normal, U low reliability, O missing), not with brackets.
+		In scope there are no O values, but 17 of 45 segments have U quarters (7 in more than half). The code is kept as
+		feature \texttt{status\_t}; the success target is measured on the 28 segments without U and the others are reported
+		separately. The UI flag follows with the UI in MS4. \newline D9 · \file{notebooks/01\_data\_exploration.ipynb},
+		sections 2--3 \\ \addlinespace[0.3em]
+		B2 & 15\,\% target against seasonal naive only; persistence may be the stronger baseline & \changed &
+		Both computed on the stored features, last 12 target quarters, MAE in pp: seasonal naive 0.794 vs.\ persistence 0.976
+		over all 45 series, and 0.630 vs.\ 0.672 on the 28 reliable segments. Seasonal naive is stronger in every group
+		(persistence carries last quarter's season into the next). Restated target: MAE $\le$ 0.535\,pp on the 28 reliable
+		segments, 15\,\% below seasonal naive. \newline D10 · \file{src/training\_pipeline/baselines.py} \\ \addlinespace[0.3em]
+		B3 & \file{requirements.txt} with minimum versions only & \changed &
+		\file{uv.lock} pins every package with version and hash; CI, the scheduled job and the Docker build install with
+		\texttt{uv sync -{}-locked}, which fails on a stale lockfile. \file{requirements.txt} removed; dev tools in a separate
+		group, not in the image. \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\ \addlinespace[0.3em]
+		E3 & Why FastAPI \emph{and} Streamlit? & \changed &
+		FastAPI dropped. The forecasts are batch-shaped: all inputs are in the feature store before anyone asks, and all 45
+		series are forecast per run, so an API would only return what the batch job already computed. A single Streamlit app
+		on Cloud Run will read the forecasts from GCS. Model version, feature time and creation time are stored per forecast
+		row and shown in the UI. \newline D13 · \file{docs/decisions.md} \\
+		\bottomrule
+	\end{longtable}
+	\endgroup
+	
+	\vfill
+	
 \end{document}
