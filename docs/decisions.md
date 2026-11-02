@@ -9,7 +9,7 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | D2 | 2026-10-15 | Add SECO Weekly Economic Activity (WEA) as the main live source | E1 |
 | D3 | 2026-10-15 | Switch the CPI covariate from quarterly to monthly LIK | E1 |
 | D4 | 2026-10-15 | Retrain on a new SAKE release, not on a weekly schedule | E2 |
-| D5 | 2026-10-15 | Store the download date with every pull of every source | A1, D2 |
+| D5 | 2026-10-15 | Store the download date with every pull of every source | A1 |
 | D6 | 2026-10-15 | Predict the year-on-year change; forecast = same quarter last year + change | B2 |
 | D7 | 2026-10-15 | Features computed as of the release date of the latest SAKE quarter | E1, leakage |
 | D8 | 2026-11-02 | Exact dependency versions in `uv.lock`, installed with `uv sync --locked` everywhere | B3 |
@@ -54,7 +54,7 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 
 **Handling.**
 - The file holds two series. Use `structure == "seco_wwa"` only and ignore `seco_wwa_pre_covid`.
-- SECO labels WEA experimental and past values can be revised. Every pull is stored with its download date (see D5), and features are built from the vintage available at each forecast date.
+- SECO labels WEA experimental and past values can be revised. Every pull is stored with its download date (see D5), so from now on each forecast can be traced to the WEA version it used. The backfill is built from the newest file, because past versions were not stored before the pipeline started (D7, limitation).
 - Observed: between the pulls of 15.10 and 25.10.2026 the 2026Q1 mean of WEA changed from −0.41 to −0.49. Revisions happen in practice, not only in theory.
 
 **Alternatives considered.**

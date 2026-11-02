@@ -1,7 +1,8 @@
 # Feature pipeline image: pull SAKE, WEA and LIK, build the features, write a new version to the feature store.
 #
 #   docker build -t unemployment-features --build-arg GIT_COMMIT=$(git rev-parse HEAD) .
-#   docker run --rm unemployment-features --offline                       # needs data/raw/exploration mounted, see README
+#   docker run --rm -v "$PWD/data/raw/exploration:/app/data/raw/exploration:ro" unemployment-features --offline
+#                                     # offline: the snapshots of notebook 01 (gitignored, local only)
 #   docker run --rm -e GCS_BUCKET=<bucket> \
 #     -e GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-key.json \
 #     -v "$PWD/gcp-key.json:/run/secrets/gcp-key.json:ro" unemployment-features
