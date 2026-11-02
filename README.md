@@ -35,14 +35,14 @@ flowchart LR
     Train -->|register| Reg[("W&B registry")]
     Reg -->|champion| Inf["Inference<br/><sub>batch, 45 segments · MS4</sub>"]
     FS -.->|latest features| Inf
-    Inf --> UI["UI<br/><sub>segment selection · MS4</sub>"]
+    Inf -->|forecasts on GCS| UI["Streamlit UI<br/><sub>Cloud Run · MS4</sub>"]
 ```
 
 | Pipeline | Input → output | Trigger |
 |---|---|---|
 | **Feature** | SAKE, WEA, LIK → raw pulls, features and labels in the feature store | Daily schedule + manual |
 | **Training** (MS3) | Features and labels → model in the registry | New SAKE release (new hash in the pull log) |
-| **Inference** (MS4) | Latest features + champion model → forecasts for 45 segments | After each feature refresh |
+| **Inference** (MS4) | Latest features + champion model → forecasts for 45 segments on GCS, shown by a Streamlit app (D13) | After each feature refresh |
 
 ## Data
 

@@ -10,7 +10,7 @@ gha-creds-*.json
 
 # Git, environments, caches
 .git
-../../Downloads/ms2_changes/.github
+.github
 .venv
 **/__pycache__
 *.pyc

@@ -17,6 +17,7 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | D10 | 2026-11-02 | Seasonal naive is the stronger baseline; target restated against it | B2 |
 | D11 | 2026-11-02 | Data versioning with dated raw files, hashes and manifests in the bucket, not DVC | reproducibility |
 | D12 | 2026-11-02 | Feature pipeline scheduled daily instead of weekly | E1 |
+| D13 | 2026-11-02 | Batch inference with a Streamlit UI; no FastAPI service | E3 |
 
 ---
 
@@ -173,4 +174,23 @@ Window: the last 12 target quarters, 2023Q3–2026Q2, the same window as the wal
 **Decision.** The feature pipeline runs daily (GitHub Actions, 05:17 UTC) instead of weekly.
 
 **Why.** WEA is published weekly and LIK monthly, but not on fixed weekdays, so a weekly run can be up to six days late. Unchanged files are not stored again (D5), so a run without new data costs a few seconds and one small feature version. GitHub can start scheduled runs hours late; the daily schedule makes up for skipped or late runs.
+
+## D13 · Serving: batch forecasts and one Streamlit app
+
+**Context.** The proposal planned a FastAPI backend next to a Streamlit frontend. Reviewers asked why both are needed (E3).
+
+**Decision.** No FastAPI service. A scheduled batch inference job loads the champion model, forecasts all 45 segments and writes the forecasts to GCS. A single Streamlit app on Cloud Run reads and shows them.
+
+**Why.** The inputs of every forecast are known before anyone asks: the features of all 45 segments are already in the feature store, and choosing a segment in the UI adds no new input. An API would only return what the batch job has already computed, as a second service to deploy, secure and monitor. This is the batch shape of the inference pipeline (SW06: scheduled batch → table, UI reads the table).
+
+**What replaces the API's guarantees.**
+
+| With an API | Here |
+|---|---|
+| `/health` reports the model version | Every forecast row stores `model_version`, `feature_time` and `created_at`; the UI shows them next to the forecast |
+| Health probe for the platform | Streamlit's built-in `/_stcore/health` for Cloud Run |
+| Smoke test after a deploy | The deploy workflow checks that the UI answers and that the newest forecast file carries the champion's version |
+| Prediction log | The forecast files themselves, one per run (SW06: in batch, the predictions file is the log) |
+
+**Revisit if** the UI ever needs forecasts for inputs that are not precomputed, e.g. user-defined scenarios. Then a `/predict` endpoint would earn its place.
 

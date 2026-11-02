@@ -76,3 +76,29 @@ def test_validate_sources_stops_on_wrong_segment_count(sources):
     sake, wea, lik, _ = sources  # cfg.N_SEGMENTS is 45, the synthetic data has 2
     with pytest.raises(SourceError, match="expected 45 segments"):
         validate_sources(sake, wea, lik)
+
+
+def test_pull_sake_takes_the_newest_csv_resource(monkeypatch, sake_csv):
+    """A1: a new release published as a separate resource is found through CKAN, not through a fixed URL."""
+    from src.feature_pipeline import sources
+
+    package = {
+        "resources": [
+            {"id": "html", "format": "HTML", "issued": "2026-11-18T06:30:00", "url": "https://bfs/page"},
+            {"id": "q2", "format": "CSV", "issued": "2026-08-18T06:30:00", "url": "https://bfs/q2.csv"},
+            {"id": "q3", "format": "CSV", "issued": "2026-11-18T06:30:00", "download_url": "https://bfs/q3.csv"},
+        ]
+    }
+    downloaded = []
+
+    class Response:
+        content = sake_csv
+
+    monkeypatch.setattr(sources, "ckan", lambda action, **params: package)
+    monkeypatch.setattr(sources, "http_get", lambda url: downloaded.append(url) or Response())
+
+    content, meta = sources.pull_sake()
+    assert downloaded == ["https://bfs/q3.csv"]
+    assert meta["resource_id"] == "q3"
+    assert meta["published"] == "2026-11-18"
+    assert meta["latest_period"] == "2013Q4"
