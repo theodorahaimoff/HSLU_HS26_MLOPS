@@ -12,6 +12,11 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | D5 | 2026-10-15 | Store the download date with every pull of every source | A1, D2 |
 | D6 | 2026-10-15 | Predict the year-on-year change; forecast = same quarter last year + change | B2 |
 | D7 | 2026-10-15 | Features computed as of the release date of the latest SAKE quarter | E1, leakage |
+| D8 | 2026-11-02 | Exact dependency versions in `uv.lock`, installed with `uv sync --locked` everywhere | B3 |
+| D9 | 2026-11-02 | Keep the BFS `STATUS` code as a column; set the success target on the reliable segments | A2, B1 |
+| D10 | 2026-11-02 | Seasonal naive is the stronger baseline; target restated against it | B2 |
+| D11 | 2026-11-02 | Data versioning with dated raw files, hashes and manifests in the bucket, not DVC | reproducibility |
+| D12 | 2026-11-02 | Feature pipeline scheduled daily instead of weekly | E1 |
 
 ---
 
@@ -49,6 +54,7 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 **Handling.**
 - The file holds two series. Use `structure == "seco_wwa"` only and ignore `seco_wwa_pre_covid`.
 - SECO labels WEA experimental and past values can be revised. Every pull is stored with its download date (see D5), and features are built from the vintage available at each forecast date.
+- Observed: between the pulls of 15.10 and 25.10.2026 the 2026Q1 mean of WEA changed from −0.41 to −0.49. Revisions happen in practice, not only in theory.
 
 **Alternatives considered.**
 
@@ -110,3 +116,61 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 Between SAKE releases, the weekly and monthly refresh recomputes the WEA and inflation features as of the refresh date.
 
 **Limitation.** Only the current version of each source is available, not past versions. If SECO, the SNB or the BFS revised older values, the backtest uses the corrected numbers. From now on every pull is stored with its date (D5).
+
+## D8 · Pinned dependencies
+
+**Decision.** `uv.lock` pins every package with its exact version and hash, and is committed. Every install uses `uv sync --locked`: the CI run, the scheduled pipeline and the Docker build. `--locked` fails when `uv.lock` no longer matches `pyproject.toml`, so a forgotten `uv lock` turns CI red instead of installing something else. The old `requirements.txt` with minimum versions only was removed.
+
+**Split.** Development tools (Jupyter, Matplotlib, pytest, ruff) are in the `dev` group. The Docker image installs with `--no-dev`, so they are not in it.
+
+## D9 · Reliability flags of small segments
+
+**Context.** Reviewers asked how the BFS marks unreliable values in small segments (A2, B1).
+
+**Finding.** Values carry no brackets or symbols. Reliability is a separate `STATUS` column with SDMX observation status codes: `A` normal, `U` low reliability, `O` missing (no value), `P` provisional (monthly values only). In scope (2010Q1 onwards, without 65+) there are no `O` values, but 17 of 45 segments have `U` quarters, 7 of them in more than half of all quarters (exploration notebook, section 2–3).
+
+**Decision.**
+- The code is kept: every feature row has `status_t`, the status of the latest released value, so the model and the UI can use it.
+- All 45 segments stay in the model and the UI. The UI (MS4) shows a "low reliability" note next to segments whose latest value is `U`.
+- The success target (D10) is measured on the 28 segments without any `U` value. The 17 segments with `U` values are reported separately.
+
+## D10 · Baseline for the success target
+
+**Context.** The proposal set a 15 % target against the seasonal-naive baseline only (B2).
+
+**Comparison.** Both naive baselines on the stored features, forecasts as of each release date, MAE in percentage points (`uv run python -m src.training_pipeline.baselines`):
+
+| Segments | Seasonal naive (rate in t−3) | Persistence (rate in t) |
+|---|---|---|
+| 28 segments without `U` | **0.630** | 0.672 |
+| 10 segments with some `U` | **0.919** | 1.348 |
+| 7 segments mostly `U` | **1.272** | 1.663 |
+| All 45 segments | **0.794** | 0.976 |
+| National total only | 0.347 | **0.333** |
+
+Window: the last 12 target quarters, 2023Q3–2026Q2, the same window as the walk-forward backtest in the proposal. Over all quarters since 2011Q2 the seasonal naive is better in every group, the national total included (0.377 vs 0.448).
+
+**Decision.** Seasonal naive is the stronger baseline. Because the series is not seasonally adjusted (D6), persistence carries last quarter's season into the next one. The target is restated: **the model's MAE over the last 12 quarters is at least 15 % lower than the seasonal-naive MAE on the 28 segments without `U` values, i.e. at most 0.535 pp (0.630 × 0.85).** The 17 segments with `U` values and the national total are reported against both baselines, without a target.
+
+**Note.** A model that predicts a year-on-year change of zero (D6) reproduces the seasonal naive exactly, so the target measures what the WEA and inflation features add on top of it. The numbers are recomputed with every new SAKE release.
+
+## D11 · Data versioning without DVC
+
+**Context.** The course uses DVC for data versioning: data in a remote, a pointer file with a hash in Git.
+
+**Decision.** The same guarantees are covered without DVC, in the bucket that also holds the feature store:
+
+| DVC | Here |
+|---|---|
+| Content hash in a `.dvc` file in Git | SHA-256 of every pull in `raw/pull_log.csv` |
+| Data in a remote (S3, GCS) | Every changed file as `raw/<source>/<download date>.csv` on GCS |
+| `git checkout` + `dvc checkout` to get a past version | Every feature version has a `manifest.json` with the hashes of its source files and the git commit of the code that built it |
+
+**Why.** The data is not edited by hand and not committed by people: it arrives from three live sources on a schedule. The pipeline therefore versions it itself, at the moment of download, with no extra tool or second remote. DVC would add value if raw data were changed manually or if expensive pipeline stages needed caching. Neither applies: a full run takes under a minute.
+
+## D12 · Daily schedule
+
+**Decision.** The feature pipeline runs daily (GitHub Actions, 05:17 UTC) instead of weekly.
+
+**Why.** WEA is published weekly and LIK monthly, but not on fixed weekdays, so a weekly run can be up to six days late. Unchanged files are not stored again (D5), so a run without new data costs a few seconds and one small feature version. GitHub can start scheduled runs hours late; the daily schedule makes up for skipped or late runs.
+

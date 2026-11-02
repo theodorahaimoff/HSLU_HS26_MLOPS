@@ -1,22 +1,30 @@
 """Feature pipeline: pull, store raw, parse, validate, build features, check, store a new version.
 
-    uv run python -m src.feature_pipeline.run             # live, writes to GCS if GCS_BUCKET is set
-    uv run python -m src.feature_pipeline.run --offline   # snapshots of notebook 01, writes to data/
+uv run python -m src.feature_pipeline.run             # live, writes to GCS if GCS_BUCKET is set
+uv run python -m src.feature_pipeline.run --offline   # snapshots of notebook 01, writes to data/
 """
 
 import argparse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from src.common.config import git_commit
 from src.common.feature_store import LABEL_COLUMNS, write_version
 from src.common.storage import get_store
 from src.feature_pipeline import config as cfg
 from src.feature_pipeline.features import backfill, check_features, feature_columns
 from src.feature_pipeline.pull_log import is_new_sake_release, record_pulls
-from src.feature_pipeline.sources import parse_lik, parse_sake, parse_wea, pull_all, sake_release_dates, validate_sources
+from src.feature_pipeline.sources import (
+    parse_lik,
+    parse_sake,
+    parse_wea,
+    pull_all,
+    sake_release_dates,
+    validate_sources,
+)
 
 
 def run(offline: bool = False) -> str:
-    run_date = cfg.SNAPSHOT_DATE if offline else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    run_date = cfg.SNAPSHOT_DATE if offline else datetime.now(UTC).strftime("%Y-%m-%d")
     store = get_store(offline)
     print(f"run date {run_date} | {'offline' if offline else 'live'} | storage {store.uri('')}")
 
@@ -44,14 +52,17 @@ def run(offline: bool = False) -> str:
     # 6 · Store a new version
     manifest = {
         "version": run_date,
-        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        "git_commit": git_commit(),
         "offline": offline,
         "rows": len(features),
         "feature_columns": feature_columns(features),
         "label_columns": LABEL_COLUMNS,
         "new_sake_release": bool(new_sake),
         "lags_days": {"sake": cfg.SAKE_LAG_DAYS, "wea": cfg.WEA_LAG_DAYS, "lik": cfg.LIK_LAG_DAYS},
-        "sources": this_run.set_index("source")[["sha256", "published", "latest_period", "download_date"]].to_dict("index"),
+        "sources": this_run.set_index("source")[["sha256", "published", "latest_period", "download_date"]].to_dict(
+            "index"
+        ),
     }
     location = write_version(store, run_date, features, manifest)
     print(f"stored {location}: {len(features):,} rows, new SAKE release: {new_sake}")

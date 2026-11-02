@@ -24,7 +24,9 @@ def quarterly_means(values: pd.Series, quarter_of_value: pd.Series, quarters: li
     return [by_quarter.get(q, np.nan) for q in quarters]
 
 
-def build_features(as_of, sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame, kind: str = "release") -> pd.DataFrame:
+def build_features(
+    as_of, sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame, kind: str = "release"
+) -> pd.DataFrame:
     as_of = pd.Timestamp(as_of)
     known = available(sake, as_of)
     t = known["quarter"].max()
@@ -68,7 +70,9 @@ def build_features(as_of, sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFra
     return f.rename_axis("segment").reset_index()
 
 
-def backfill(sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame, releases: pd.Series, run_date: str) -> pd.DataFrame:
+def backfill(
+    sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame, releases: pd.Series, run_date: str
+) -> pd.DataFrame:
     """Release rows for every SAKE release since 2011Q1, plus refresh rows as of the run date."""
     first_t = cfg.START_QUARTER + 4  # first quarter with a value 4 quarters earlier, needed for yoy_t
     dates = releases[(releases.index >= first_t) & (releases <= pd.Timestamp(run_date))]
@@ -115,7 +119,9 @@ def check_features(
         raise LeakageError("a row uses a LIK month not available on its as_of")
 
     # 2 · The target quarter was never released before as_of
-    target_release = pd.PeriodIndex(features["target_quarter"], freq="Q").map(lambda q: releases.get(q, pd.Timestamp.max))
+    target_release = pd.PeriodIndex(features["target_quarter"], freq="Q").map(
+        lambda q: releases.get(q, pd.Timestamp.max)
+    )
     if not (target_release > features["as_of"]).all():
         raise LeakageError("a row predicts a quarter that was already released")
 

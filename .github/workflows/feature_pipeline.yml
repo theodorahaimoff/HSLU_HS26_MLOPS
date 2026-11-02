@@ -1,8 +1,14 @@
 name: Feature pipeline
 
+# Pulls SAKE, WEA and LIK, stores every pull with its download date, rebuilds the features (backfill + refresh)
+# and writes a new version to the feature store on GCS.
+#
+# Daily: WEA is published weekly and LIK monthly, but not always on the same weekday. Unchanged files are not stored
+# again (pull log, D5), so a run without new data only costs a few seconds. GitHub may start scheduled runs late.
+
 on:
   schedule:
-    - cron: "17 5 * * 1" # Mondays 05:17 UTC (06:17 / 07:17 in Zurich), after the weekly WEA update
+    - cron: "17 5 * * *" # daily 05:17 UTC (06:17 / 07:17 in Zurich)
   workflow_dispatch: {} # "Run workflow" button under Actions
 
 concurrency:
@@ -19,15 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
-      - name: Install dependencies from uv.lock
-        run: uv sync --frozen --no-dev
+      - name: Install from uv.lock
+        run: uv sync --locked
 
-      - name: Run tests
-        run: uv run pytest
+      - name: Unit tests # a broken pipeline must not write a feature version
+        run: uv run pytest -q
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3

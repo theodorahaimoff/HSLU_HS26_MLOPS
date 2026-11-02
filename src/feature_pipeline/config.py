@@ -21,8 +21,8 @@ N_SEGMENTS = 45
 
 # --- Publication lags, used where the real publication date is unknown (notebook 02, section 2) ---
 SAKE_LAG_DAYS = 49  # quarter end -> BFS release (Q2 2026: 30.06 -> 18.08)
-WEA_LAG_DAYS = 24   # week start -> value in the file (observed 24 days on 15.10, 20 days on 25.10)
-LIK_LAG_DAYS = 21   # month end -> SNB publication (August 2026 published 21.09)
+WEA_LAG_DAYS = 24  # week start -> value in the file (observed 24 days on 15.10, 20 days on 25.10)
+LIK_LAG_DAYS = 21  # month end -> SNB publication (August 2026 published 21.09)
 
 # --- Storage keys ---
 PULL_LOG = "raw/pull_log.csv"

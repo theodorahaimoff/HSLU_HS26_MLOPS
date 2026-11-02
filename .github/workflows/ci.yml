@@ -1,0 +1,49 @@
+name: ci
+
+# Every push and pull request: lockfile check, lint, unit tests, and the Docker image build.
+# Runs without any secret: the tests use small synthetic files, not the live sources or the bucket.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install from uv.lock (fails if the lockfile is stale)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Unit tests
+        run: uv run pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the image
+        run: docker build --build-arg GIT_COMMIT=${{ github.sha }} -t unemployment-features:${{ github.sha }} .
+
+      - name: Smoke test the image
+        run: |
+          docker run --rm --entrypoint python unemployment-features:${{ github.sha }} \
+            -c "import src.feature_pipeline.run; print('image ok')"
+          docker run --rm --entrypoint id unemployment-features:${{ github.sha }}

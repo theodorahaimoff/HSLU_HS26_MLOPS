@@ -14,7 +14,17 @@ from src.common.storage import Store
 from src.feature_pipeline.config import PULL_LOG
 from src.feature_pipeline.sources import Pull
 
-LOG_COLUMNS = ["download_date", "source", "sha256", "is_new", "published", "latest_period", "resource_id", "url", "file"]
+LOG_COLUMNS = [
+    "download_date",
+    "source",
+    "sha256",
+    "is_new",
+    "published",
+    "latest_period",
+    "resource_id",
+    "url",
+    "file",
+]
 
 
 def load_pull_log(store: Store) -> pd.DataFrame:

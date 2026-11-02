@@ -85,7 +85,13 @@ def pull_wea(offline: bool = False) -> Pull:
     content = read_snapshot("wea") if offline else http_get(cfg.WEA_URL).content
     dates = pd.read_csv(io.BytesIO(content), usecols=["structure", "date"])
     latest = dates.loc[dates["structure"] == "seco_wwa", "date"].max()
-    return content, {"source": "wea", "url": cfg.WEA_URL, "resource_id": None, "published": None, "latest_period": latest}
+    return content, {
+        "source": "wea",
+        "url": cfg.WEA_URL,
+        "resource_id": None,
+        "published": None,
+        "latest_period": latest,
+    }
 
 
 def pull_lik(offline: bool = False) -> Pull:
@@ -93,7 +99,13 @@ def pull_lik(offline: bool = False) -> Pull:
     lines = content.decode("utf-8-sig").splitlines()
     published = lines[1].split(";")[1].strip('"')[:10]  # "PublishingDate";"YYYY-MM-DD HH:MM"
     latest = max(line.split(";")[0].strip('"') for line in lines[4:] if line)
-    return content, {"source": "lik", "url": cfg.LIK_URL, "resource_id": None, "published": published, "latest_period": latest}
+    return content, {
+        "source": "lik",
+        "url": cfg.LIK_URL,
+        "resource_id": None,
+        "published": published,
+        "latest_period": latest,
+    }
 
 
 def pull_all(offline: bool = False) -> dict[str, Pull]:
@@ -121,12 +133,13 @@ def parse_sake(content: bytes) -> pd.DataFrame:
     q = raw[raw["FREQ"] == "Q"].copy()
     q["quarter"] = q["PERIOD"].map(parse_quarter)
     q = q[(q["quarter"] >= cfg.START_QUARTER) & (q[AGE] != cfg.EXCLUDED_AGE)]
-    q["segment"] = [short_label(g, n, a) for g, n, a in zip(q[GENDER], q[NAT], q[AGE])]
+    q["segment"] = [short_label(g, n, a) for g, n, a in zip(q[GENDER], q[NAT], q[AGE], strict=True)]
     q = q.drop_duplicates(["segment", "quarter"])  # the BFS hierarchy repeats some combinations
     return (
         q.rename(columns={GENDER: "gender", NAT: "nationality", AGE: "age_group", "STATUS": "status"})
-        .assign(rate=pd.to_numeric(q["VALUE"], errors="coerce"))
-        [["segment", "gender", "nationality", "age_group", "quarter", "rate", "status"]]
+        .assign(rate=pd.to_numeric(q["VALUE"], errors="coerce"))[
+            ["segment", "gender", "nationality", "age_group", "quarter", "rate", "status"]
+        ]
         .sort_values(["segment", "quarter"])
         .reset_index(drop=True)
     )
@@ -158,7 +171,7 @@ def sake_release_dates(quarters, log: pd.DataFrame) -> pd.Series:
         name="released",
     )
     known = log[(log["source"] == "sake") & log["published"].notna()]
-    for latest, published in zip(known["latest_period"], known["published"]):
+    for latest, published in zip(known["latest_period"], known["published"], strict=True):
         q = pd.Period(latest, freq="Q")
         if q in releases.index:
             releases[q] = pd.Timestamp(published)
@@ -178,8 +191,11 @@ def validate_sources(sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame) -
     months = lik.loc[lik["month"] >= cfg.START_QUARTER.asfreq("M", "start"), "month"]
 
     checks = {
-        f"expected {cfg.N_SEGMENTS} segments, got {sake['segment'].nunique()}": sake["segment"].nunique() == cfg.N_SEGMENTS,
-        f"segments with missing quarters: {per_segment[per_segment < n_quarters].to_dict()}": (per_segment == n_quarters).all(),
+        f"expected {cfg.N_SEGMENTS} segments, got {sake['segment'].nunique()}": sake["segment"].nunique()
+        == cfg.N_SEGMENTS,
+        f"segments with missing quarters: {per_segment[per_segment < n_quarters].to_dict()}": (
+            per_segment == n_quarters
+        ).all(),
         "SAKE has empty values in scope": sake["rate"].notna().all(),
         f"unexpected STATUS codes: {set(sake['status'])}": set(sake["status"]) <= {"A", "P", "U"},
         "WEA dates are not unique Mondays": wea["date"].is_unique and (wea["date"].dt.dayofweek == 0).all(),

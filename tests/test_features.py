@@ -41,7 +41,7 @@ def test_target_is_the_next_quarter_and_not_yet_released(features, sources):
     quarter_t = pd.PeriodIndex(features["quarter_t"], freq="Q")
     target = pd.PeriodIndex(features["target_quarter"], freq="Q")
     assert (target == quarter_t + 1).all()
-    for as_of, q in zip(features["as_of"], target):
+    for as_of, q in zip(features["as_of"], target, strict=True):
         assert releases.get(q, pd.Timestamp.max) > as_of
 
 

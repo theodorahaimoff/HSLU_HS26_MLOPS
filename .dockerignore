@@ -1,0 +1,31 @@
+# Keep the build context small and free of secrets. Only pyproject.toml, uv.lock and src/ are copied into the image.
+
+# Secrets
+.env
+*.env
+gcp-key*.json
+*credentials*.json
+*.key
+gha-creds-*.json
+
+# Git, environments, caches
+.git
+../../Downloads/ms2_changes/.github
+.venv
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.ipynb_checkpoints
+
+# Data and outputs (the pipeline reads from the live sources and writes to GCS)
+data
+wandb
+mlruns
+
+# Not needed at run time
+notebooks
+tests
+docs
+*.md
+LICENSE

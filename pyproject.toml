@@ -2,15 +2,13 @@
 name = "hslu-hs26-mlops"
 version = "0.1.0"
 requires-python = ">=3.14"
+description = "Quarter-ahead Swiss ILO unemployment nowcast for 45 demographic segments (HSLU MLOps HS26)"
 dependencies = [
     "fastapi>=0.111",
     "google-cloud-storage>=2.16",
-    "jupyter>=1.0",
     "lightgbm>=4.3",
-    "matplotlib>=3.8",
     "pandas>=2.2",
     "pyarrow>=15.0",
-    "pytest>=8.2",
     "python-dotenv>=1.0",
     "requests>=2.31",
     "streamlit>=1.35",
@@ -18,14 +16,26 @@ dependencies = [
     "wandb>=0.17",
 ]
 
+# Development only: `uv sync --no-dev` (Docker image, scheduled job) leaves these out
 [dependency-groups]
 dev = [
     "ipykernel>=7.4.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.11.2",
+    "pytest>=8.2",
+    "ruff>=0.14",
 ]
-
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "tests"]

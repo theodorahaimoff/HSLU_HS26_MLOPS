@@ -32,6 +32,8 @@ model_registry_cache/
 
 # ---- Notebooks ----
 .ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
 
 # ---- OS / editor cruft ----
 .DS_Store
