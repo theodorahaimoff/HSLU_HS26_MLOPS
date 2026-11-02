@@ -119,6 +119,8 @@ Between SAKE releases, the weekly and monthly refresh recomputes the WEA and inf
 
 **Limitation.** Only the current version of each source is available, not past versions. If SECO, the SNB or the BFS revised older values, the backtest uses the corrected numbers. From now on every pull is stored with its date (D5).
 
+**Open: the WEA lag.** The 24 days were set from two pulls (24 and 20 days). On 02.11.2026 the newest WEA week was 28 days old, so SECO does not always publish within 24 days. If longer delays repeat, the backfill uses some WEA weeks a few days earlier than they were available. The pull log records when each week first appeared; the lag is re-measured from it in MS3, before training.
+
 ## D8 · Pinned dependencies
 
 **Decision.** `uv.lock` pins every package with its exact version and hash, and is committed. Every install uses `uv sync --locked`: the CI run, the scheduled pipeline and the Docker build. `--locked` fails when `uv.lock` no longer matches `pyproject.toml`, so a forgotten `uv lock` turns CI red instead of installing something else. The old `requirements.txt` with minimum versions only was removed.

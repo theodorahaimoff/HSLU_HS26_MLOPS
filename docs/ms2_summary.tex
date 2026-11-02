@@ -96,7 +96,7 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 	
 	\vspace{4mm}
 	
-	{\LARGE\bfseries\color{hsluDark}MS2 Summary for MLOPS Project}\\[1mm]
+	{\Large\bfseries\color{hsluDark}MS2 Summary --- Swiss Segmented Unemployment Rate Predictor}\\[1mm]
 	{\large\color{hsluGray}Theodora Haimoff}
 	
 	\vspace{4mm}
@@ -109,8 +109,7 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 			\vspace{1mm}
 			\renewcommand{\arraystretch}{1.35}
 			\begin{tabularx}{\linewidth}{>{\bfseries}p{0.24\linewidth} X}
-				Project Title & Swiss Segmented Unemployment Rate Predictor (P04)\\
-				Milestone & MS2 · Feature Pipeline\\
+				Milestone & MS2 · Feature Pipeline · project P04\\
 				Repository & \url{https://github.com/theodorahaimoff/HSLU_HS26_MLOPS} \\
 				Decision log & \file{docs/decisions.md} (D1--D14), referenced below as D\textit{n}\\
 				Date of Submission & 02.11.2026\\
@@ -168,13 +167,21 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 		\item \textbf{Target = year-on-year change} (D6): SAKE is not seasonally adjusted (Q1 and Q3 lie about 0.3\,pp
 		above the yearly mean, Q2 and Q4 below).
 		\item \textbf{Point-in-time features at the SAKE release date} (D7), with publication lags observed in the data
-		(SAKE 49 days, WEA $\le$ 24, LIK 21) and chosen on the late side: too late is pessimistic, too early would
-		leak.
+		(SAKE 49 days, WEA 24, LIK 21); a value assumed available too early would leak, too late is only pessimistic.
 		\item \textbf{Versioning in the pipeline instead of DVC} (D11): data arrives on a schedule, so every pull is hashed
 		and stored at download time, and every feature version names its source hashes and git commit.
 	\end{itemize}
-	Observed on the way: SECO revised past WEA values between my pulls of 15.10 and 25.10 (2026--Q1 mean
-	$-0.41 \rightarrow -0.49$), which is exactly why every pull is kept with its date.
+	\subsection{What it cost}
+	\begin{itemize}
+		\item \textbf{History:} year-on-year features need the quarter one year earlier, so 2010 only serves as history
+		and the training data has 61 labelled target quarters instead of 65.
+		\item \textbf{Revisions:} SECO revised past WEA values between my pulls of 15.10 and 25.10 (2026--Q1 mean
+		$-0.41 \rightarrow -0.49$). The backfill can only use today's version, so backtest results may look slightly
+		better than what was knowable at the time (D7). Every version is kept from now on.
+		\item \textbf{Lag assumptions:} on 02.11 the newest WEA week was 28 days old, more than the assumed 24 days. If
+		that repeats, the backfill uses some WEA weeks a few days early; MS3 re-measures the lag from the pull log.
+		\item \textbf{Redesign:} answering E1 replaced the proposal's single-source design, and FastAPI was dropped (E3).
+	\end{itemize}
 	
 	\subsection{What a reviewer should look at first}
 	\begin{enumerate}
@@ -201,41 +208,35 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 		\endhead
 		E1 \newline {\normalfont\footnotesize(Must)} & Data too static: SAKE changes once a quarter, so ingest $\rightarrow$
 		retrain $\rightarrow$ monitor can hardly be shown & \changed &
-		Nowcast design: SAKE stays the quarterly target; SECO WEA (weekly) and monthly LIK inflation were added as live
-		features. New WEA or LIK values reach the feature store as refresh rows on the next daily run, so the forecast input
-		changes every week. A monthly SECO target was rejected: no API, monthly figures only as PDF (would need scraping).
+		Nowcast: SAKE stays the quarterly target; SECO WEA (weekly) and LIK inflation (monthly) were added as live
+		features and reach the feature store as refresh rows on the next daily run. A monthly SECO target was rejected:
+		figures only as PDF, would need scraping.
 		\newline D1--D3, D12 · \file{src/feature\_pipeline/sources.py} \\ \addlinespace[0.3em]
 		E2 & Weekly scheduled retraining on unchanged quarterly labels produces identical models & \partly &
-		Decided: retrain on a new SAKE release, not on a schedule (D4). The trigger signal exists now: a new SAKE hash in the
-		pull log sets \texttt{new\_sake\_release} in the manifest of that feature version. The retraining workflow that reacts
-		to it is MS3 work. \newline \file{src/feature\_pipeline/pull\_log.py} \\ \addlinespace[0.3em]
+		Retrain on a new SAKE release, not on a schedule (D4). The trigger exists: a new SAKE hash sets
+		\texttt{new\_sake\_release} in the manifest. The workflow that reacts to it is MS3 work. \newline \file{src/feature\_pipeline/pull\_log.py} \\ \addlinespace[0.3em]
 		A1 & Release detection by the hash of one fixed file URL misses releases published as new resources; store release
 		dates & \changed &
-		Each run lists the dataset's resources through CKAN and takes the CSV with the latest \texttt{issued} date, not a fixed
-		URL. The pull log stores download date, release date, latest quarter and SHA-256 per pull. Tested: a newer release as a
-		separate resource is picked (\file{tests/test\_sources.py}), and two consecutive pulls store only what changed
-		(\file{tests/test\_storage.py}). The first real new release (2026--Q3, expected around 18.11) is the live check.
+		Each run lists the dataset's resources in CKAN and takes the CSV with the latest \texttt{issued} date; the pull log
+		stores download date, release date, latest quarter and SHA-256. Tested in \file{tests/test\_sources.py} and
+		\file{test\_storage.py}; the 2026--Q3 release (around 18.11) is the live check.
 		\newline D5 · \file{src/feature\_pipeline/sources.py} (\texttt{pull\_sake}) \\ \addlinespace[0.3em]
 		A2, B1 & Small segments: how does BFS mark unreliable or suppressed values, and how is it shown? & \partly &
-		BFS marks reliability in a separate \texttt{STATUS} column (A normal, U low reliability, O missing), not with brackets.
-		In scope there are no O values, but 17 of 45 segments have U quarters (7 in more than half). The code is kept as
-		feature \texttt{status\_t}; the success target is measured on the 28 segments without U and the others are reported
-		separately. The UI flag follows with the UI in MS4. \newline D9 · \file{notebooks/01\_data\_exploration.ipynb},
+		A separate \texttt{STATUS} column (A normal, U low reliability, O missing), not brackets. No O values in scope,
+		but 17 of 45 segments have U quarters. Kept as feature \texttt{status\_t}; the target is measured on the 28
+		segments without U, the others are reported separately. The UI flag follows in MS4. \newline D9 · \file{notebooks/01\_data\_exploration.ipynb},
 		sections 2--3 \\ \addlinespace[0.3em]
 		B2 & 15\,\% target against seasonal naive only; persistence may be the stronger baseline & \changed &
-		Both computed on the stored features, last 12 target quarters, MAE in pp: seasonal naive 0.794 vs.\ persistence 0.976
-		over all 45 series, and 0.630 vs.\ 0.672 on the 28 reliable segments. Seasonal naive is stronger in every group
-		(persistence carries last quarter's season into the next). Restated target: MAE $\le$ 0.535\,pp on the 28 reliable
-		segments, 15\,\% below seasonal naive. \newline D10 · \file{src/training\_pipeline/baselines.py} \\ \addlinespace[0.3em]
+		MAE over the last 12 target quarters: seasonal naive 0.794\,pp vs.\ persistence 0.976 (all 45 series), 0.630 vs.\
+		0.672 (28 reliable segments); seasonal naive wins in every group. Restated target: MAE $\le$ 0.535\,pp on the
+		28 reliable segments, 15\,\% below seasonal naive. \newline D10 · \file{src/training\_pipeline/baselines.py} \\ \addlinespace[0.3em]
 		B3 & \file{requirements.txt} with minimum versions only & \changed &
-		\file{uv.lock} pins every package with version and hash; CI, the scheduled job and the Docker build install with
-		\texttt{uv sync -{}-locked}, which fails on a stale lockfile. \file{requirements.txt} removed. Dev tools, training and UI
-		packages are separate groups, so the image holds only the 5 packages the feature pipeline needs. \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\ \addlinespace[0.3em]
+		\file{uv.lock} pins every package with its hash; CI, the scheduled job and Docker install with \texttt{uv sync
+		-{}-locked}, which fails on a stale lockfile. Dev, training and UI packages are separate groups (5 packages in the image). \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\ \addlinespace[0.3em]
 		E3 & Why FastAPI \emph{and} Streamlit? & \changed &
-		FastAPI dropped. The forecasts are batch-shaped: all inputs are in the feature store before anyone asks, and all 45
-		series are forecast per run, so an API would only return what the batch job already computed. A single Streamlit app
-		on Cloud Run will read the forecasts from GCS. Model version, feature time and creation time are stored per forecast
-		row and shown in the UI. \newline D13 · \file{docs/decisions.md} \\
+		FastAPI dropped: all inputs are in the feature store before anyone asks and all 45 series are forecast per run, so an
+		API would only return precomputed values. One Streamlit app on Cloud Run reads the forecasts from GCS and shows
+		model version and feature time per forecast. \newline D13 · \file{docs/decisions.md} \\
 		\bottomrule
 	\end{longtable}
 	\endgroup
