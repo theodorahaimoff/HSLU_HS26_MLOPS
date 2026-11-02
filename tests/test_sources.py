@@ -62,20 +62,20 @@ def test_release_dates_prefer_issued_date_from_log(sake_csv):
 
 def test_validate_sources_passes(sources, two_segments):
     sake, wea, lik, _ = sources
-    validate_sources(sake, wea, lik)
+    validate_sources(sake, wea, lik, RUN_DATE)
 
 
 def test_validate_sources_stops_on_missing_quarter(sources, two_segments):
     sake, wea, lik, _ = sources
     broken = sake.drop(sake.index[5])
     with pytest.raises(SourceError, match="missing quarters"):
-        validate_sources(broken, wea, lik)
+        validate_sources(broken, wea, lik, RUN_DATE)
 
 
 def test_validate_sources_stops_on_wrong_segment_count(sources):
     sake, wea, lik, _ = sources  # cfg.N_SEGMENTS is 45, the synthetic data has 2
     with pytest.raises(SourceError, match="expected 45 segments"):
-        validate_sources(sake, wea, lik)
+        validate_sources(sake, wea, lik, RUN_DATE)
 
 
 def test_pull_sake_takes_the_newest_csv_resource(monkeypatch, sake_csv):
@@ -102,3 +102,31 @@ def test_pull_sake_takes_the_newest_csv_resource(monkeypatch, sake_csv):
     assert meta["resource_id"] == "q3"
     assert meta["published"] == "2026-11-18"
     assert meta["latest_period"] == "2013Q4"
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        (lambda sake: sake.assign(rate=sake["rate"].where(sake.index != 3, 75.0)), "SAKE rates outside"),
+        (lambda sake: sake.assign(rate=sake["rate"] / 100), "national rate outside"),  # a share instead of %
+        (lambda sake: sake.assign(rate=sake["rate"].where(sake.index != 0, -1.0)), "SAKE rates outside"),
+    ],
+)
+def test_validate_sources_stops_on_implausible_sake(sources, two_segments, change, message):
+    sake, wea, lik, _ = sources
+    with pytest.raises(SourceError, match=message):
+        validate_sources(change(sake), wea, lik, RUN_DATE)
+
+
+def test_validate_sources_stops_on_implausible_wea_and_inflation(sources, two_segments):
+    sake, wea, lik, _ = sources
+    with pytest.raises(SourceError, match="WEA values outside"):
+        validate_sources(sake, wea.assign(value=wea["value"] * 100), lik, RUN_DATE)
+    with pytest.raises(SourceError, match="inflation values since 2010 outside"):
+        validate_sources(sake, wea, lik.assign(value=lik["value"] * 100), RUN_DATE)
+
+
+def test_validate_sources_stops_on_future_periods(sources, two_segments):
+    sake, wea, lik, _ = sources
+    with pytest.raises(SourceError, match="lies after"):
+        validate_sources(sake, wea, lik, "2014-01-15")  # files contain weeks and months after this date

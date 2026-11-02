@@ -185,22 +185,47 @@ class SourceError(ValueError):
     """A source changed shape. The run stops instead of writing a silently wrong feature table."""
 
 
-def validate_sources(sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame) -> None:
+def _outside(values: pd.Series, bounds: tuple[float, float]) -> pd.Series:
+    low, high = bounds
+    return values[(values < low) | (values > high)]
+
+
+def validate_sources(sake: pd.DataFrame, wea: pd.DataFrame, lik: pd.DataFrame, run_date: str) -> None:
+    """Stop the run if a source changed shape or delivers implausible values (D14).
+
+    Structure: segments, quarters and months complete, known STATUS codes, one WEA value per Monday.
+    Values: every number within a plausible range, and no period that lies after the run date.
+    """
     n_quarters = len(pd.period_range(cfg.START_QUARTER, sake["quarter"].max(), freq="Q"))
     per_segment = sake.groupby("segment")["quarter"].nunique()
     months = lik.loc[lik["month"] >= cfg.START_QUARTER.asfreq("M", "start"), "month"]
+    run_day = pd.Timestamp(run_date)
+
+    rates_out = _outside(sake["rate"], cfg.RATE_RANGE)
+    national_out = _outside(sake.loc[sake["segment"] == "National total", "rate"], cfg.NATIONAL_RATE_RANGE)
+    wea_out = _outside(wea["value"], cfg.WEA_RANGE)
+    lik_out = _outside(lik.loc[lik["month"] >= cfg.START_QUARTER.asfreq("M", "start"), "value"], cfg.INFLATION_RANGE)
+
+    latest_quarter, latest_week, latest_month = sake["quarter"].max(), wea["date"].max(), lik["month"].max()
 
     checks = {
-        f"expected {cfg.N_SEGMENTS} segments, got {sake['segment'].nunique()}": sake["segment"].nunique()
-        == cfg.N_SEGMENTS,
-        f"segments with missing quarters: {per_segment[per_segment < n_quarters].to_dict()}": (
-            per_segment == n_quarters
-        ).all(),
+        # structure
+        f"expected {cfg.N_SEGMENTS} segments, got {sake['segment'].nunique()}": sake["segment"].nunique() == cfg.N_SEGMENTS,
+        f"segments with missing quarters: {per_segment[per_segment < n_quarters].to_dict()}": (per_segment == n_quarters).all(),
         "SAKE has empty values in scope": sake["rate"].notna().all(),
         f"unexpected STATUS codes: {set(sake['status'])}": set(sake["status"]) <= {"A", "P", "U"},
         "WEA dates are not unique Mondays": wea["date"].is_unique and (wea["date"].dt.dayofweek == 0).all(),
         "LIK has duplicate months": lik["month"].is_unique,
         "LIK has missing months since 2010": len(months) == len(pd.period_range(months.min(), months.max(), freq="M")),
+        # values
+        f"{len(rates_out)} SAKE rates outside {cfg.RATE_RANGE} %: {rates_out.head(3).tolist()}": rates_out.empty,
+        f"national rate outside {cfg.NATIONAL_RATE_RANGE} % (unit change?): {national_out.head(3).tolist()}": national_out.empty,
+        f"{len(wea_out)} WEA values outside {cfg.WEA_RANGE}: {wea_out.head(3).tolist()}": wea_out.empty,
+        f"{len(lik_out)} inflation values since 2010 outside {cfg.INFLATION_RANGE} %: {lik_out.head(3).tolist()}": lik_out.empty,
+        # no future periods
+        f"SAKE quarter {latest_quarter} has not ended by {run_date}": latest_quarter.end_time <= run_day + pd.Timedelta(days=1),
+        f"WEA week {latest_week.date()} lies after {run_date}": latest_week <= run_day,
+        f"LIK month {latest_month} lies after {run_date}": latest_month <= run_day.to_period("M"),
     }
     failed = [message for message, ok in checks.items() if not ok]
     if failed:

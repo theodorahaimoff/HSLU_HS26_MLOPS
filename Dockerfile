@@ -28,7 +28,8 @@ USER app
 RUN mkdir -p /app/data/raw
 
 # Dependencies first: this layer is only rebuilt when the lockfile changes.
-# --locked fails the build if uv.lock and pyproject.toml disagree; --no-dev leaves out jupyter, pytest and ruff.
+# --locked fails the build if uv.lock and pyproject.toml disagree; --no-dev installs no dependency group
+# (dev, train, ui), only the five runtime packages of the feature pipeline.
 COPY --chown=app:app pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 

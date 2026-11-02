@@ -112,7 +112,7 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 				Project Title & Swiss Segmented Unemployment Rate Predictor (P04)\\
 				Milestone & MS2 · Feature Pipeline\\
 				Repository & \url{https://github.com/theodorahaimoff/HSLU_HS26_MLOPS} \\
-				Decision log & \file{docs/decisions.md} (D1--D13), referenced below as D\textit{n}\\
+				Decision log & \file{docs/decisions.md} (D1--D14), referenced below as D\textit{n}\\
 				Date of Submission & 02.11.2026\\
 			\end{tabularx}
 			\vspace{1mm}
@@ -152,9 +152,9 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 		Docker, pinned deps, README & \file{Dockerfile}: \texttt{python:3.14-slim}, uv pinned, dependency layer first,
 		non-root user, credentials only at run time. All installs use \texttt{uv sync -{}-locked} on \file{uv.lock}. README:
 		architecture, data, feature store layout, how to run locally, in Docker and in CI. \\
-		Tests, CI \& secrets & 25 unit tests on small fixture files in the exact source formats, so they run in CI without
+		Tests, CI \& secrets & 30 unit tests on small fixture files in the exact source formats, so they run in CI without
 		network or credentials; \file{ci.yml} runs lint, tests and the Docker build on every push. On the real data, source
-		validation and the leakage checks run in every scheduled run before a version is written. Keys live in \file{.env}
+		validation (structure and value ranges, D14) and the leakage checks run in every scheduled run before a version is written. Keys live in \file{.env}
 		(gitignored) and GitHub Secrets; the history contains none. \\
 		\bottomrule
 	\end{longtable}
@@ -229,8 +229,8 @@ headheight=22pt, headsep=4mm, footskip=5mm]{geometry}
 		segments, 15\,\% below seasonal naive. \newline D10 · \file{src/training\_pipeline/baselines.py} \\ \addlinespace[0.3em]
 		B3 & \file{requirements.txt} with minimum versions only & \changed &
 		\file{uv.lock} pins every package with version and hash; CI, the scheduled job and the Docker build install with
-		\texttt{uv sync -{}-locked}, which fails on a stale lockfile. \file{requirements.txt} removed; dev tools in a separate
-		group, not in the image. \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\ \addlinespace[0.3em]
+		\texttt{uv sync -{}-locked}, which fails on a stale lockfile. \file{requirements.txt} removed. Dev tools, training and UI
+		packages are separate groups, so the image holds only the 5 packages the feature pipeline needs. \newline D8 · \file{pyproject.toml}, \file{uv.lock}, \file{Dockerfile} \\ \addlinespace[0.3em]
 		E3 & Why FastAPI \emph{and} Streamlit? & \changed &
 		FastAPI dropped. The forecasts are batch-shaped: all inputs are in the feature store before anyone asks, and all 45
 		series are forecast per run, so an API would only return what the batch job already computed. A single Streamlit app

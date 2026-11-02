@@ -3,19 +3,25 @@ name = "hslu-hs26-mlops"
 version = "0.1.0"
 requires-python = ">=3.14"
 description = "Quarter-ahead Swiss ILO unemployment nowcast for 45 demographic segments (HSLU MLOps HS26)"
+# Runtime of the feature pipeline: the only packages in the Docker image
 dependencies = [
     "google-cloud-storage>=2.16",
-    "lightgbm>=4.3",
     "pandas>=2.2",
     "pyarrow>=15.0",
     "python-dotenv>=1.0",
     "requests>=2.31",
-    "streamlit>=1.35",
-    "wandb>=0.17",
 ]
 
-# Development only: `uv sync --no-dev` (Docker image, scheduled job) leaves these out
+# Installed only on request (D8): `uv sync --group train` (MS3), `uv sync --group ui` (MS4).
+# `dev` is installed by a plain `uv sync`; the Docker image uses --no-dev and gets none of these groups.
 [dependency-groups]
+train = [
+    "lightgbm>=4.3",
+    "wandb>=0.17",
+]
+ui = [
+    "streamlit>=1.35",
+]
 dev = [
     "ipykernel>=7.4.0",
     "jupyter>=1.1.1",

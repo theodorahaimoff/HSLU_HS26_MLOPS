@@ -41,7 +41,7 @@ def run(offline: bool = False) -> str:
     lik = parse_lik(pulls["lik"][0], run_date)
     releases = sake_release_dates(sake["quarter"], log)
     sake["available_from"] = sake["quarter"].map(releases)
-    validate_sources(sake, wea, lik)
+    validate_sources(sake, wea, lik, run_date)
 
     # 3–4 · Features: backfill since 2011 plus refresh rows for the run date
     features = backfill(sake, wea, lik, releases, run_date)

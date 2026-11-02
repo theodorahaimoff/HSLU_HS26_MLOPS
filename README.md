@@ -79,7 +79,8 @@ feature_store/features/version=<run date>/
 
 Each run recomputes the full **backfill** (one row set per SAKE release since 2011Q1, the training data) and adds
 **refresh** rows as of the run date (the newest nowcast). Every row is computed only from values that were
-published by its `as_of` date (point-in-time correct, D7); the pipeline stops before writing if a check fails.
+published by its `as_of` date (point-in-time correct, D7). Before anything is written, every pull is validated
+(structure and plausible value ranges, D14) and the features are checked for leakage; the run stops if a check fails.
 
 | Group | Columns |
 |---|---|
@@ -99,10 +100,13 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.14 and all packages come fro
 ```bash
 git clone https://github.com/theodorahaimoff/HSLU_HS26_MLOPS.git
 cd HSLU_HS26_MLOPS
-uv sync --locked                     # exact versions from uv.lock
+uv sync --locked                     # exact versions from uv.lock: feature pipeline + dev tools
 uv run pytest                        # unit tests, offline, a few seconds
 uv run ruff check                    # lint
 ```
+
+Training (MS3) and UI (MS4) packages are separate dependency groups, installed only when needed:
+`uv sync --locked --group train`, `uv sync --locked --group ui` (D8).
 
 **Feature pipeline**
 
@@ -149,6 +153,6 @@ src/
 ├── feature_pipeline/   sources (pull, parse, validate), pull_log, features (build, backfill, checks), run
 ├── training_pipeline/  baselines (B2); training follows in MS3
 └── inference_pipeline/ MS4
-tests/                  unit tests on small synthetic files, no network or credentials needed
+tests/                  unit tests on small fixture files in the source formats, no network or credentials needed
 Dockerfile · .dockerignore · pyproject.toml · uv.lock · .env.example
 ```

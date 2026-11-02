@@ -18,6 +18,7 @@ Each entry names the review label it answers, so `docs/ms2_summary.pdf` can refe
 | D11 | 2026-11-02 | Data versioning with dated raw files, hashes and manifests in the bucket, not DVC | reproducibility |
 | D12 | 2026-11-02 | Feature pipeline scheduled daily instead of weekly | E1 |
 | D13 | 2026-11-02 | Batch inference with a Streamlit UI; no FastAPI service | E3 |
+| D14 | 2026-11-02 | Validate structure and plausible value ranges of every pull before building features | data quality |
 
 ---
 
@@ -122,7 +123,7 @@ Between SAKE releases, the weekly and monthly refresh recomputes the WEA and inf
 
 **Decision.** `uv.lock` pins every package with its exact version and hash, and is committed. Every install uses `uv sync --locked`: the CI run, the scheduled pipeline and the Docker build. `--locked` fails when `uv.lock` no longer matches `pyproject.toml`, so a forgotten `uv lock` turns CI red instead of installing something else. The old `requirements.txt` with minimum versions only was removed.
 
-**Split.** Development tools (Jupyter, Matplotlib, pytest, ruff) are in the `dev` group. The Docker image installs with `--no-dev`, so they are not in it.
+**Split.** `dependencies` holds only what the feature pipeline runs on (pandas, pyarrow, requests, google-cloud-storage, python-dotenv). Everything else is in dependency groups: `dev` (Jupyter, Matplotlib, pytest, ruff), `train` (LightGBM, W&B, from MS3) and `ui` (Streamlit, from MS4). A plain `uv sync` adds `dev`; the other groups are installed on request (`uv sync --group train`). The Docker image installs with `--no-dev` and gets no group at all: 27 instead of 66 packages, half the size (305 instead of 610 MB installed), and fewer packages that can carry vulnerabilities.
 
 ## D9 · Reliability flags of small segments
 
@@ -193,4 +194,20 @@ Window: the last 12 target quarters, 2023Q3–2026Q2, the same window as the wal
 | Prediction log | The forecast files themselves, one per run (SW06: in batch, the predictions file is the log) |
 
 **Revisit if** the UI ever needs forecasts for inputs that are not precomputed, e.g. user-defined scenarios. Then a `/predict` endpoint would earn its place.
+
+## D14 · Data validation on every pull
+
+**Context.** The structure checks (segments, quarters, months, STATUS codes) did not look at the numbers themselves. A source that switched units, e.g. a rate delivered as a share (0.043) instead of a percentage (4.3), would have produced a complete but wrong feature table.
+
+**Decision.** `validate_sources` also checks every value against a plausible range, and that no period lies after the run date. A failed check stops the run before anything is written, and the scheduled job turns red.
+
+| Check | Bound | Observed 2010–2026 |
+|---|---|---|
+| SAKE rate, any segment | 0–50 % | 1.3–22.8 % |
+| SAKE rate, national total | 1–15 % | 3.7–5.8 % |
+| WEA | −30 to +30 | −10.4 (April 2020) to +13.7 |
+| Inflation since 2010 | −10 to +15 % | −1.4 to +3.5 % |
+| Latest quarter, week, month | not after the run date | – |
+
+**Why these bounds.** Wide enough that a real crisis worse than COVID still passes (the job should not fail on real data), narrow enough to catch unit and scale changes, which shift values by a factor of 100. The national total has its own, tighter range because a scale error shows up there most clearly. The bounds are in `src/feature_pipeline/config.py`; drift on the inputs (gradual change within the bounds) is a separate check for MS3/MS4.
 
